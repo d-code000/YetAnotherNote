@@ -84,7 +84,7 @@ fun NotesListScreen(
                 items(notes, key = { it.id }) { note ->
                     NoteListItem(
                         note = note,
-                        isSelected = viewModel.isNoteSelected(note.id),
+                        isSelected = selectedNotes.contains(note.id),
                         isMultiSelectMode = isMultiSelectMode,
                         onClick = {
                             if (isMultiSelectMode) {
