@@ -9,11 +9,14 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.disah.yetanothernote.data.Note
+import com.disah.yetanothernote.utils.LocationHelper
 import com.disah.yetanothernote.viewmodel.NoteViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -27,6 +30,12 @@ fun NoteEditScreen(
     var latitude by remember { mutableStateOf<Double?>(null) }
     var longitude by remember { mutableStateOf<Double?>(null) }
     var isLoading by remember { mutableStateOf(noteId != null) }
+    var isLoadingLocation by remember { mutableStateOf(false) }
+    var locationError by remember { mutableStateOf<String?>(null) }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val locationHelper = remember { LocationHelper(context) }
 
     val locationPermissionsState = rememberMultiplePermissionsState(
         permissions = listOf(
@@ -142,26 +151,56 @@ fun NoteEditScreen(
             OutlinedButton(
                 onClick = {
                     if (locationPermissionsState.allPermissionsGranted) {
-                        latitude = 55.7558
-                        longitude = 37.6173
+                        scope.launch {
+                            isLoadingLocation = true
+                            locationError = null
+                            when (val result = locationHelper.getCurrentLocation(context)) {
+                                is LocationHelper.LocationResult.Success -> {
+                                    latitude = result.latitude
+                                    longitude = result.longitude
+                                    locationError = null
+                                }
+                                is LocationHelper.LocationResult.Error -> {
+                                    locationError = result.message
+                                }
+                            }
+                            isLoadingLocation = false
+                        }
                     } else {
                         locationPermissionsState.launchMultiplePermissionRequest()
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isLoadingLocation
             ) {
-                Icon(
-                    Icons.Default.LocationOn,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
+                if (isLoadingLocation) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.LocationOn,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    if (locationPermissionsState.allPermissionsGranted) {
-                        "Добавить текущую геопозицию"
-                    } else {
-                        "Запросить доступ к геопозиции"
+                    when {
+                        isLoadingLocation -> "Получение координат..."
+                        locationPermissionsState.allPermissionsGranted -> "Добавить текущую геопозицию"
+                        else -> "Запросить доступ к геопозиции"
                     }
+                )
+            }
+
+            if (locationError != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = locationError!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
                 )
             }
         }
